@@ -123,10 +123,10 @@ class MainWindow(QMainWindow):
         self.dashboard = QFrame()
         self.dashboard.setObjectName("dashboard")
         dash_layout = QHBoxLayout(self.dashboard)
-        dash_layout.setContentsMargins(20, 20, 20, 20)
-        dash_layout.setSpacing(15)
+        dash_layout.setContentsMargins(30, 25, 30, 25) # More spacious
+        dash_layout.setSpacing(20)
         
-        self.stat_total = StatCard("Total Devices", "🖨️", "#3498db")
+        self.stat_total = StatCard("Total Devices", "🖨️", "#007acc")
         self.stat_online = StatCard("Online Now", "🌐", "#27ae60")
         self.stat_alerts = StatCard("Low Supplies", "⚠️", "#e67e22")
         
