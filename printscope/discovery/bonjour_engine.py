@@ -1,5 +1,7 @@
-from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
+from zeroconf.asyncio import AsyncZeroconf
+from zeroconf import ServiceBrowser, ServiceListener
 import socket
+import asyncio
 from typing import List, Dict
 from printscope.models.printer import Printer
 
@@ -44,17 +46,21 @@ class BonjourDiscovery(ServiceListener):
     def remove_service(self, zeroconf, type, name):
         pass
 
-async def discover_mdns(timeout: float = 3.0) -> List[Printer]:
-    """Discover printers via mDNS/Bonjour."""
-    zeroconf = Zeroconf()
+async def discover_mdns(timeout: float = 5.0) -> List[Printer]:
+    """Discover printers via mDNS/Bonjour using AsyncZeroconf."""
+    aiozc = AsyncZeroconf()
     listener = BonjourDiscovery()
     
     # Common printer service types
     services = ["_printer._tcp.local.", "_ipp._tcp.local.", "_ipps._tcp.local.", "_pdl-datastream._tcp.local."]
     
-    browsers = [ServiceBrowser(zeroconf, service, listener) for service in services]
+    browsers = [ServiceBrowser(aiozc.zeroconf, service, listener) for service in services]
     
     await asyncio.sleep(timeout)
-    zeroconf.close()
+    
+    for browser in browsers:
+        browser.cancel()
+        
+    await aiozc.async_close()
     
     return list(listener.discovered_printers.values())

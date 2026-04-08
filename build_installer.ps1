@@ -5,11 +5,15 @@ pip install -r requirements.txt
 pip install pyinstaller
 
 Write-Host "`nPaso 2/4: Empaquetando aplicacion con PyInstaller..." -ForegroundColor Cyan
-pyinstaller --noconfirm --onedir --windowed --name "PrintScope" `
+pyinstaller --clean --noconfirm --onedir --windowed --name "PrintScope" `
     --collect-all "pysnmp" `
+    --collect-all "pyasn1" `
+    --collect-all "pysmi" `
+    --collect-all "pysnmpcrypto" `
     --collect-all "zeroconf" `
+    --copy-metadata "pysnmp" `
     --add-data "discovered_printers.json;." `
-    "printscope/main.py"
+    "run.py"
 
 Write-Host "`nPaso 3/4: Verificando Inno Setup..." -ForegroundColor Cyan
 $isccPath = ""

@@ -1,0 +1,5 @@
+build/
+dist/
+Output/
+PrintScope.spec
+__pycache__

@@ -7,19 +7,22 @@ class NetworkScanner:
     
     PRINTER_PORTS = [80, 443, 515, 631, 9100]
     
-    def __init__(self, timeout: float = 1.0):
+    def __init__(self, timeout: float = 1.0, max_concurrency: int = 50):
         self.timeout = timeout
+        self.semaphore = asyncio.Semaphore(max_concurrency)
 
     async def check_port(self, ip: str, port: int) -> bool:
         """Check if a specific port is open on an IP address."""
-        try:
-            conn = asyncio.open_connection(ip, port)
-            _, writer = await asyncio.wait_for(conn, timeout=self.timeout)
-            writer.close()
-            await writer.wait_closed()
-            return True
-        except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
-            return False
+        async with self.semaphore:
+            try:
+                conn = asyncio.open_connection(ip, port)
+                _, writer = await asyncio.wait_for(conn, timeout=self.timeout)
+                writer.close()
+                await writer.wait_closed()
+                return True
+            except (asyncio.TimeoutError, ConnectionRefusedError, OSError):
+                return False
+        return False
 
     async def is_printer_candidate(self, ip: str) -> bool:
         """Check if any common printer ports are open."""
