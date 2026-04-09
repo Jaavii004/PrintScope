@@ -31,6 +31,11 @@ class Printer:
     history: List[Dict] = field(default_factory=list) # Snapshot of levels over time
     last_seen: datetime = field(default_factory=datetime.now)
     web_interface_url: Optional[str] = None
+    
+    # v3.1 Hardware Intelligence
+    firmware_version: Optional[str] = None
+    total_pages: Optional[int] = None
+    memory_mb: Optional[int] = None
 
     def estimate_days_remaining(self, consumable_name: str) -> Optional[int]:
         """Simple linear regression to estimate days remaining for a consumable."""
@@ -91,5 +96,8 @@ class Printer:
             ],
             "history": self.history,
             "last_seen": self.last_seen.isoformat(),
-            "web_interface_url": self.web_interface_url
+            "web_interface_url": self.web_interface_url,
+            "firmware_version": self.firmware_version,
+            "total_pages": self.total_pages,
+            "memory_mb": self.memory_mb
         }

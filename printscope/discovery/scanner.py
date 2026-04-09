@@ -39,6 +39,29 @@ class NetworkScanner:
 def generate_ip_range(start_ip: str, end_ip: str) -> List[str]:
     """Generate a list of IPs between start and end (inclusive)."""
     import ipaddress
-    start = ipaddress.IPv4Address(start_ip)
-    end = ipaddress.IPv4Address(end_ip)
-    return [str(ipaddress.IPv4Address(ip)) for ip in range(int(start), int(end) + 1)]
+    try:
+        start = ipaddress.IPv4Address(start_ip)
+        end = ipaddress.IPv4Address(end_ip)
+        return [str(ipaddress.IPv4Address(ip)) for ip in range(int(start), int(end) + 1)]
+    except Exception:
+        return []
+
+def get_local_subnets() -> List[str]:
+    """Detect all local subnets attached to active network interfaces."""
+    import socket
+    import ipaddress
+    subnets = []
+    try:
+        # Get all IP addresses associated with this machine
+        # We can use socket.getaddrinfo or similar
+        hostname = socket.gethostname()
+        for addr_info in socket.getaddrinfo(hostname, None):
+            ip = addr_info[4][0]
+            if ":" not in ip: # IPv4 only for now
+                if not ip.startswith("127."):
+                    # Guess a /24 subnet for common LANs
+                    network = ipaddress.IPv4Network(f"{ip}/24", strict=False)
+                    subnets.append(str(network))
+    except Exception:
+        pass
+    return list(set(subnets))

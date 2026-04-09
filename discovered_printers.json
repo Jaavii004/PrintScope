@@ -1,1 +1,419 @@
-{}
+{
+    "192.168.0.24": {
+        "ip": "192.168.0.24",
+        "hostname": "",
+        "brand": null,
+        "model": "Generic 45C-5",
+        "serial_number": "10816011180",
+        "mac_address": "\u0000 kdS\u00b5",
+        "uptime": "119035",
+        "location": "Oliplus",
+        "status": "Idle",
+        "is_online": true,
+        "consumables": [
+            {
+                "name": "Toner (Cyan)",
+                "level": 72,
+                "max_capacity": 100,
+                "percentage": 72,
+                "est_days": null
+            },
+            {
+                "name": "Toner (Magenta)",
+                "level": 20,
+                "max_capacity": 100,
+                "percentage": 20,
+                "est_days": null
+            },
+            {
+                "name": "Toner (Yellow)",
+                "level": 43,
+                "max_capacity": 100,
+                "percentage": 43,
+                "est_days": null
+            },
+            {
+                "name": "Toner (Black)",
+                "level": 20,
+                "max_capacity": 100,
+                "percentage": 20,
+                "est_days": null
+            },
+            {
+                "name": "Imaging Unit (Cyan)",
+                "level": 0,
+                "max_capacity": 100,
+                "percentage": 0,
+                "est_days": null
+            },
+            {
+                "name": "Imaging Unit (Magenta)",
+                "level": 24,
+                "max_capacity": 100,
+                "percentage": 24,
+                "est_days": null
+            },
+            {
+                "name": "Imaging Unit (Yellow)",
+                "level": 0,
+                "max_capacity": 100,
+                "percentage": 0,
+                "est_days": null
+            },
+            {
+                "name": "Drum Cartridge",
+                "level": 90,
+                "max_capacity": 100,
+                "percentage": 90,
+                "est_days": null
+            },
+            {
+                "name": "Developer Cartridge",
+                "level": 32,
+                "max_capacity": 100,
+                "percentage": 32,
+                "est_days": null
+            },
+            {
+                "name": "Fusing Unit",
+                "level": 82,
+                "max_capacity": 100,
+                "percentage": 82,
+                "est_days": null
+            },
+            {
+                "name": "Image Transfer Belt Unit",
+                "level": 44,
+                "max_capacity": 100,
+                "percentage": 44,
+                "est_days": null
+            },
+            {
+                "name": "Transfer Roller Unit",
+                "level": 36,
+                "max_capacity": 100,
+                "percentage": 36,
+                "est_days": null
+            },
+            {
+                "name": "Ozone Filter",
+                "level": 90,
+                "max_capacity": 100,
+                "percentage": 90,
+                "est_days": null
+            },
+            {
+                "name": "Toner Filter",
+                "level": 96,
+                "max_capacity": 100,
+                "percentage": 96,
+                "est_days": null
+            }
+        ],
+        "history": [
+            {
+                "timestamp": "2026-04-09T09:28:45.530241",
+                "consumables": [
+                    {
+                        "name": "Toner (Cyan)",
+                        "level": 72
+                    },
+                    {
+                        "name": "Toner (Magenta)",
+                        "level": 20
+                    },
+                    {
+                        "name": "Toner (Yellow)",
+                        "level": 43
+                    },
+                    {
+                        "name": "Toner (Black)",
+                        "level": 20
+                    },
+                    {
+                        "name": "Imaging Unit (Cyan)",
+                        "level": 0
+                    },
+                    {
+                        "name": "Imaging Unit (Magenta)",
+                        "level": 24
+                    },
+                    {
+                        "name": "Imaging Unit (Yellow)",
+                        "level": 0
+                    },
+                    {
+                        "name": "Drum Cartridge",
+                        "level": 90
+                    },
+                    {
+                        "name": "Developer Cartridge",
+                        "level": 32
+                    },
+                    {
+                        "name": "Fusing Unit",
+                        "level": 82
+                    },
+                    {
+                        "name": "Image Transfer Belt Unit",
+                        "level": 44
+                    },
+                    {
+                        "name": "Transfer Roller Unit",
+                        "level": 36
+                    },
+                    {
+                        "name": "Ozone Filter",
+                        "level": 90
+                    },
+                    {
+                        "name": "Toner Filter",
+                        "level": 96
+                    }
+                ]
+            }
+        ],
+        "last_seen": "2026-04-09T09:35:40.532148",
+        "web_interface_url": "http://192.168.0.24"
+    },
+    "192.168.0.1": {
+        "ip": "192.168.0.1",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T09:29:22.108807",
+        "web_interface_url": null
+    },
+    "192.168.0.100": {
+        "ip": "192.168.0.100",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T09:29:27.133068",
+        "web_interface_url": null
+    },
+    "192.168.0.106": {
+        "ip": "192.168.0.106",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T09:29:32.065295",
+        "web_interface_url": null
+    },
+    "192.168.0.107": {
+        "ip": "192.168.0.107",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T09:29:37.010155",
+        "web_interface_url": null
+    },
+    "192.168.0.114": {
+        "ip": "192.168.0.114",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:43:34.392119",
+        "web_interface_url": null
+    },
+    "192.168.0.123": {
+        "ip": "192.168.0.123",
+        "hostname": "GS1900",
+        "brand": null,
+        "model": "GS1900-24E",
+        "serial_number": "",
+        "mac_address": "\u00fc\"\u00f4\u00fbK\u00ff",
+        "uptime": "931540928",
+        "location": "Location",
+        "status": "Unknown",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:43:34.443822",
+        "web_interface_url": "http://192.168.0.123"
+    },
+    "192.168.0.125": {
+        "ip": "192.168.0.125",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:43:38.765109",
+        "web_interface_url": null
+    },
+    "192.168.0.126": {
+        "ip": "192.168.0.126",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:43:43.091252",
+        "web_interface_url": null
+    },
+    "192.168.0.142": {
+        "ip": "192.168.0.142",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:43:47.474312",
+        "web_interface_url": null
+    },
+    "192.168.0.162": {
+        "ip": "192.168.0.162",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:43:52.402591",
+        "web_interface_url": null
+    },
+    "192.168.0.167": {
+        "ip": "192.168.0.167",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:43:56.875182",
+        "web_interface_url": null
+    },
+    "192.168.0.168": {
+        "ip": "192.168.0.168",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:44:01.194534",
+        "web_interface_url": null
+    },
+    "192.168.0.171": {
+        "ip": "192.168.0.171",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:44:05.597862",
+        "web_interface_url": null
+    },
+    "192.168.0.201": {
+        "ip": "192.168.0.201",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:44:10.042091",
+        "web_interface_url": null
+    },
+    "192.168.0.250": {
+        "ip": "192.168.0.250",
+        "hostname": null,
+        "brand": null,
+        "model": "Network Device",
+        "serial_number": null,
+        "mac_address": null,
+        "uptime": null,
+        "location": null,
+        "status": "Online",
+        "is_online": true,
+        "consumables": [],
+        "history": [],
+        "last_seen": "2026-04-09T08:44:14.339744",
+        "web_interface_url": null
+    }
+}

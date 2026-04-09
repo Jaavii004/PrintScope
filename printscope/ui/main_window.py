@@ -5,16 +5,18 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLineEdit, QLabel, QTableWidget,
     QStatusBar, QToolBar, QFileDialog, QMessageBox,
-    QSystemTrayIcon, QMenu, QProgressBar, QFrame
+    QSystemTrayIcon, QMenu, QProgressBar, QFrame, QStackedWidget
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect
-from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect, QUrl
+from PyQt6.QtGui import QIcon, QAction, QDesktopServices
 
-from printscope.ui.components import PrinterTable, StatCard, DetailsSidebar
-from printscope.discovery.scanner import NetworkScanner, generate_ip_range
+from printscope.ui.components import PrinterTable, SideNavBar, AnalyticsDashboard, DiagnosticsConsole, StatCard, DetailsSidebar
+from printscope.discovery.scanner import NetworkScanner, generate_ip_range, get_local_subnets
 from printscope.discovery.snmp_engine import SNMPEngine
 from printscope.discovery.bonjour_engine import discover_mdns
 from printscope.data.manager import PrinterManager
+from printscope.data.config import ConfigManager
+from printscope.ui.settings_page import SettingsPage
 
 class DiscoveryWorker(QThread):
     """Worker thread for network discovery."""
@@ -24,10 +26,11 @@ class DiscoveryWorker(QThread):
     progress_val = pyqtSignal(int)
     current_ip = pyqtSignal(str)
 
-    def __init__(self, start_ip, end_ip):
+    def __init__(self, start_ip, end_ip, config):
         super().__init__()
         self.start_ip = start_ip
         self.end_ip = end_ip
+        self.config = config
 
     def run(self):
         try:
@@ -47,8 +50,9 @@ class DiscoveryWorker(QThread):
         total_ips = len(ips)
         self.progress.emit(f"Scanning {total_ips} addresses...")
         
-        scanner = NetworkScanner(timeout=1.5, max_concurrency=60) # Increased concurrency
-        snmp = SNMPEngine()
+        scanner = NetworkScanner(timeout=self.config.discovery_timeout, max_concurrency=60)
+        snmp = SNMPEngine(timeout=self.config.discovery_timeout)
+        snmp.COMMUNITIES = self.config.snmp_communities
         
         # 1. mDNS Discovery (fast)
         self.current_ip.emit("mDNS/Bonjour")
@@ -98,10 +102,12 @@ class DiscoveryWorker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PrintScope - Network Scanner")
-        self.resize(1100, 650)
+        self.setWindowTitle("PrintScope — Enterprise Fleet Monitor")
+        self.resize(1280, 760)
+        self.setMinimumSize(1024, 640)
         
         self.data_manager = PrinterManager()
+        self.config_manager = ConfigManager()
         
         self.setup_ui()
         self.setup_tray()
@@ -115,123 +121,181 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        main_h_layout = QHBoxLayout(central_widget)
+        main_h_layout.setContentsMargins(0, 0, 0, 0)
+        main_h_layout.setSpacing(0)
+        
+        # 1. Sidebar
+        self.sidebar = SideNavBar()
+        self.sidebar.nav_changed.connect(self.switch_tab)
+        main_h_layout.addWidget(self.sidebar)
+        
+        # 2. Content Stack
+        self.stack = QStackedWidget()
+        main_h_layout.addWidget(self.stack)
+        
+        # PAGE 0: Devices
+        self.devices_page = QWidget()
+        self.devices_page.setStyleSheet("background: #0d0d0f;")
+        devices_layout = QVBoxLayout(self.devices_page)
+        devices_layout.setContentsMargins(0, 0, 0, 0)
+        devices_layout.setSpacing(0)
 
-        # 1. Dashboard Area
-        self.dashboard = QFrame()
-        self.dashboard.setObjectName("dashboard")
-        dash_layout = QHBoxLayout(self.dashboard)
-        dash_layout.setContentsMargins(30, 25, 30, 25) # More spacious
-        dash_layout.setSpacing(20)
-        
-        self.stat_total = StatCard("Total Devices", "🖨️", "#007acc")
-        self.stat_online = StatCard("Online Now", "🌐", "#27ae60")
-        self.stat_alerts = StatCard("Low Supplies", "⚠️", "#e67e22")
-        
-        dash_layout.addWidget(self.stat_total)
-        dash_layout.addWidget(self.stat_online)
-        dash_layout.addWidget(self.stat_alerts)
-        dash_layout.addStretch()
-        
-        main_layout.addWidget(self.dashboard)
+        # PAGE 0 Header — Devices
+        self.ctrl_container = QWidget()
+        self.ctrl_container.setObjectName("ctrl_container")
+        ctrl_layout = QHBoxLayout(self.ctrl_container)
+        ctrl_layout.setContentsMargins(28, 0, 28, 0)
+        ctrl_layout.setSpacing(12)
+        ctrl_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.ctrl_container.setFixedHeight(64)
 
-        # 2. Control & Search Bar
-        self.ctrl_bar = QFrame()
-        self.ctrl_bar.setObjectName("ctrl_bar")
-        ctrl_layout = QHBoxLayout(self.ctrl_bar)
-        ctrl_layout.setContentsMargins(20, 10, 20, 10)
-        ctrl_layout.setSpacing(15)
-        
-        # IP Range
-        range_box = QHBoxLayout()
-        range_box.addWidget(QLabel("RANGE:"))
+        # IP range
+        range_lbl = QLabel("RANGE")
+        range_lbl.setStyleSheet("color: #444455; font-size: 9px; font-weight: 800; letter-spacing: 1.5px;")
+        ctrl_layout.addWidget(range_lbl)
+
         self.start_ip_input = QLineEdit("192.168.1.1")
-        self.end_ip_input = QLineEdit("192.168.1.255")
-        self.start_ip_input.setFixedWidth(110)
-        self.end_ip_input.setFixedWidth(110)
-        range_box.addWidget(self.start_ip_input)
-        range_box.addWidget(QLabel("→"))
-        range_box.addWidget(self.end_ip_input)
-        ctrl_layout.addLayout(range_box)
-        
-        self.scan_btn = QPushButton("START NEW SCAN")
+        self.end_ip_input   = QLineEdit("192.168.1.255")
+        self.start_ip_input.setFixedWidth(124)
+        self.end_ip_input.setFixedWidth(124)
+        arrow_lbl = QLabel("→")
+        arrow_lbl.setStyleSheet("color: #444455;")
+        ctrl_layout.addWidget(self.start_ip_input)
+        ctrl_layout.addWidget(arrow_lbl)
+        ctrl_layout.addWidget(self.end_ip_input)
+
+        self.scan_btn = QPushButton("  ▶  RUN SCAN")
         self.scan_btn.setObjectName("scan_btn")
-        self.scan_btn.setFixedWidth(150)
+        self.scan_btn.setFixedHeight(36)
+        self.scan_btn.setMinimumWidth(148)
+        self.scan_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.scan_btn.clicked.connect(self.start_scan)
         ctrl_layout.addWidget(self.scan_btn)
-        
-        self.report_btn = QPushButton("GENERATE REPORT")
-        self.report_btn.setObjectName("report_btn")
-        self.report_btn.setFixedWidth(150)
-        self.report_btn.clicked.connect(self.export_report)
-        ctrl_layout.addWidget(self.report_btn)
-        
-        ctrl_layout.addSpacing(20)
-        
-        # Search Filter
-        search_box = QHBoxLayout()
-        search_box.setSpacing(8)
+
+        ctrl_layout.addSpacing(8)
+
+        # Search
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search printers (IP, Model, Brand)...")
+        self.search_input.setPlaceholderText("🔍  Search IP, model, brand…")
+        self.search_input.setMinimumWidth(220)
         self.search_input.textChanged.connect(self.filter_table)
-        search_box.addWidget(QLabel("🔍"))
-        search_box.addWidget(self.search_input)
-        ctrl_layout.addLayout(search_box)
-        
+        ctrl_layout.addWidget(self.search_input)
+
         ctrl_layout.addStretch()
-        
-        self.auto_refresh_cb = QPushButton("Auto Scan: Off")
+
+        # Device count badge
+        self.device_count_lbl = QLabel("0 devices")
+        self.device_count_lbl.setStyleSheet(
+            "color: #888899; background: #1a1a1e; border: 1px solid #252530;"
+            " border-radius: 10px; padding: 3px 10px; font-size: 10px; font-weight: 600;"
+        )
+        ctrl_layout.addWidget(self.device_count_lbl)
+
+        self.auto_refresh_cb = QPushButton("⟳  AUTO")
         self.auto_refresh_cb.setCheckable(True)
-        self.auto_refresh_cb.setFixedWidth(120)
+        self.auto_refresh_cb.setFixedHeight(32)
+        self.auto_refresh_cb.setCursor(Qt.CursorShape.PointingHandCursor)
         self.auto_refresh_cb.clicked.connect(self.toggle_auto_refresh)
         ctrl_layout.addWidget(self.auto_refresh_cb)
-        
-        main_layout.addWidget(self.ctrl_bar)
 
-        # 3. Progress Overlay (Horizontal)
+        export_btn = QPushButton("📄  REPORT")
+        export_btn.setFixedHeight(32)
+        export_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        export_btn.setToolTip("Export HTML fleet report (Ctrl+E)")
+        export_btn.clicked.connect(self.export_html_report)
+        ctrl_layout.addWidget(export_btn)
+
+        devices_layout.addWidget(self.ctrl_container)
+
+        # Progress bar
         self.progress_container = QFrame()
         self.progress_container.setObjectName("progress_container")
-        self.progress_container.setFixedHeight(30)
+        self.progress_container.setFixedHeight(24)
         prog_layout = QHBoxLayout(self.progress_container)
-        prog_layout.setContentsMargins(20, 0, 20, 0)
-        
+        prog_layout.setContentsMargins(28, 4, 28, 4)
+        prog_layout.setSpacing(12)
+
         self.progress_bar = QProgressBar()
-        self.progress_bar.setFixedHeight(6)
+        self.progress_bar.setFixedHeight(4)
         self.progress_bar.setTextVisible(False)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar { background-color: #1e1e1e; border-radius: 3px; border: none; }
-            QProgressBar::chunk { background-color: #3498db; border-radius: 3px; }
-        """)
-        
-        self.current_proc_label = QLabel("Waiting...")
-        self.current_proc_label.setStyleSheet("font-size: 10px; color: #666;")
-        
+
+        self.current_proc_label = QLabel("Ready")
+        self.current_proc_label.setFixedWidth(200)
+        self.current_proc_label.setStyleSheet("color: #444455; font-size: 9px; font-weight: 600;")
+
         prog_layout.addWidget(self.progress_bar)
         prog_layout.addWidget(self.current_proc_label)
-        
-        main_layout.addWidget(self.progress_container)
+
+        devices_layout.addWidget(self.progress_container)
         self.progress_container.hide()
 
-        # 4. Content Area (Table + Sidebar)
-        content_box = QHBoxLayout()
-        content_box.setContentsMargins(0, 0, 0, 0)
-        content_box.setSpacing(0)
-        
+        # Table + sidebar
+        self.devices_content = QWidget()
+        devices_h_layout = QHBoxLayout(self.devices_content)
+        devices_h_layout.setContentsMargins(0, 0, 0, 0)
+        devices_h_layout.setSpacing(0)
+
         self.table = PrinterTable(self.data_manager)
         self.table.itemSelectionChanged.connect(self.handle_selection_changed)
-        content_box.addWidget(self.table)
-        
-        self.sidebar = DetailsSidebar()
-        content_box.addWidget(self.sidebar)
-        
-        main_layout.addLayout(content_box)
-        
-        # Style
+        devices_h_layout.addWidget(self.table)
+
+        self.details_sidebar = DetailsSidebar()
+        devices_h_layout.addWidget(self.details_sidebar)
+
+        devices_layout.addWidget(self.devices_content)
+        self.stack.addWidget(self.devices_page)
+
+        # PAGE 1: Analytics
+        self.analytics_page = AnalyticsDashboard(self.data_manager)
+        self.stack.addWidget(self.analytics_page)
+
+        # PAGE 2: Diagnostics — premium layout
+        self.diag_page   = QWidget()
+        self.diag_page.setStyleSheet("background: #0d0d0f;")
+        diag_root        = QVBoxLayout(self.diag_page)
+        diag_root.setContentsMargins(0, 0, 0, 0)
+        diag_root.setSpacing(0)
+
+        # Diag header bar
+        diag_hdr_frame = QFrame()
+        diag_hdr_frame.setFixedHeight(64)
+        diag_hdr_frame.setStyleSheet("background: #141416; border-bottom: 1px solid #252530;")
+        diag_hdr_layout = QHBoxLayout(diag_hdr_frame)
+        diag_hdr_layout.setContentsMargins(28, 0, 28, 0)
+
+        diag_title = QLabel("Live Diagnostics")
+        diag_title.setStyleSheet(
+            "color: #f0f0f5; font-size: 16px; font-weight: 800; letter-spacing: -0.3px;"
+        )
+        diag_sub = QLabel(" — Real-time discovery feed")
+        diag_sub.setStyleSheet("color: #444455; font-size: 12px;")
+        diag_hdr_layout.addWidget(diag_title)
+        diag_hdr_layout.addWidget(diag_sub)
+        diag_hdr_layout.addStretch()
+
+        clear_btn = QPushButton("CLEAR")
+        clear_btn.setFixedHeight(30)
+        diag_hdr_layout.addWidget(clear_btn)
+        diag_root.addWidget(diag_hdr_frame)
+
+        self.console = DiagnosticsConsole()
+        diag_root.addWidget(self.console)
+        clear_btn.clicked.connect(self.console.clear)
+
+        self.stack.addWidget(self.diag_page)
+
+        # PAGE 3: Settings
+        self.settings_page = SettingsPage(self.config_manager)
+        self.stack.addWidget(self.settings_page)
+
+        # Style & Interactivity
         self.apply_standard_styling()
         
-        # Timers
+        # IP Auto-detection helper
+        self._init_network_intelligence()
+        
+        # Periodic Tasks
         from PyQt6.QtCore import QTimer
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.start_scan)
@@ -242,17 +306,164 @@ class MainWindow(QMainWindow):
         
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
+        self._setup_shortcuts()
 
-    def export_report(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save Inventory Report", "", "HTML Files (*.html)")
-        if path:
-            self.data_manager.export_html(path)
-            QMessageBox.information(self, "Report Generated", f"Executive report saved to:\n{path}")
+    def _init_network_intelligence(self):
+        """Setup logging redirection and smart network detection."""
+        import logging
+        class ConsoleHandler(logging.Handler):
+            def __init__(self, console):
+                super().__init__()
+                self.console = console
+            def emit(self, record):
+                msg = self.format(record)
+                self.console.log(record.levelname, msg)
+        
+        handler = ConsoleHandler(self.console)
+        handler.setFormatter(logging.Formatter('%(message)s'))
+        logging.getLogger("PrintScope").addHandler(handler)
+        
+        # Add auto-detect button to ctrl_layout
+        self.auto_detect_btn = QPushButton("AUTO-DETECT RANGES")
+        self.auto_detect_btn.setFixedWidth(160)
+        self.auto_detect_btn.clicked.connect(self.run_auto_detect)
+        # Find ctrl_layout (it's in devices_page header)
+        # Actually I'll just add it to the header
+        self.ctrl_container.layout().insertWidget(4, self.auto_detect_btn)
+
+    def run_auto_detect(self):
+        subnets = get_local_subnets()
+        if subnets:
+            self.console.log("SUCCESS", f"Auto-detected subnets: {', '.join(subnets)}")
+            # For now, just set the first one
+            first = subnets[0].replace("/24", "")
+            prefix = ".".join(first.split(".")[:-1])
+            self.start_ip_input.setText(f"{prefix}.1")
+            self.end_ip_input.setText(f"{prefix}.255")
+        else:
+            self.console.log("WARNING", "No local subnets identified.")
+
+    def handle_selection_changed(self):
+        """Update the details sidebar when a row is selected."""
+        row = self.table.currentRow()
+        if row != -1:
+            ip_item = self.table.item(row, 1)
+            if ip_item:
+                ip = ip_item.text()
+                printer = self.data_manager.printers.get(ip)
+                if printer:
+                    self.details_sidebar.update_details(printer.to_dict())
+                    self.show_sidebar()
+        else:
+            self.hide_sidebar()
+
+    def show_sidebar(self):
+        if not self.details_sidebar.isVisible():
+            self.details_sidebar.show()
+            # Smooth slide-in could be added here if needed
+
+    def hide_sidebar(self):
+        self.details_sidebar.hide()
+
+    def switch_tab(self, index):
+        if index == 1: # Analytics
+            self.analytics_page.refresh_data()
+        elif index == 3: # Settings
+            self.config_manager.load()
+            
+        # Optional: Add a subtle fade-in animation
+        self.stack.setCurrentIndex(index)
+        anim = QPropertyAnimation(self.stack, b"windowOpacity")
+        anim.setDuration(250)
+        anim.setStartValue(0.7)
+        anim.setEndValue(1.0)
+        anim.setEasingCurve(QEasingCurve.Type.OutQuad)
+        anim.start()
+
+    def show_context_menu(self, pos):
+        """Premium Right-Click Command Center."""
+        row = self.table.rowAt(pos.y())
+        if row == -1: return
+        
+        ip_item = self.table.item(row, 1)
+        if not ip_item: return
+        ip = ip_item.text()
+        printer = self.data_manager.printers.get(ip)
+        
+        menu = QMenu(self)
+        menu.setStyleSheet("QMenu { background-color: #1a1a1c; color: white; border: 1px solid #333; } QMenu::item:selected { background-color: #007acc; }")
+        
+        # Actions
+        actions = [
+            ("🌐 Open Web Console", lambda: self.open_device_web(printer)),
+            ("📡 Execute Ping Test", lambda: self.run_remote_ping(ip)),
+            ("📋 Copy Serial Number", lambda: self.copy_to_clip(printer.serial_number if printer else "")),
+            ("🔄 Force Deep Refresh", lambda: self.start_scan()),
+            (None, None), # Separator
+            ("📊 Generate PDF Insight", self.export_report)
+        ]
+        
+        for text, func in actions:
+            if text is None:
+                menu.addSeparator()
+            else:
+                action = QAction(text, self)
+                action.triggered.connect(func)
+                menu.addAction(action)
+                
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def open_device_web(self, printer):
+        if printer and printer.ip:
+            url = QUrl(f"http://{printer.ip}")
+            QDesktopServices.openUrl(url)
+            self.console.log("INFO", f"Opening web console for {printer.ip}...")
+
+    def run_remote_ping(self, ip):
+        self.console.log("INFO", f"Initiating ICMP Ping request to {ip}...")
+        # Simple ping simulation or actual ping via subprocess
+        import subprocess
+        try:
+            # -n 1 for windows
+            res = subprocess.run(["ping", "-n", "1", ip], capture_output=True, text=True)
+            if res.returncode == 0:
+                self.console.log("SUCCESS", f"Ping to {ip} successful. Response received.")
+            else:
+                self.console.log("ERROR", f"Ping to {ip} failed. Device unreachable.")
+        except Exception as e:
+            self.console.log("ERROR", f"Ping execution error: {e}")
+
+    def copy_to_clip(self, text):
+        from PyQt6.QtWidgets import QApplication
+        QApplication.clipboard().setText(text)
+        self.statusBar().showMessage(f"Copied: {text}", 3000)
+
+    def show_notification(self, title, msg, icon=QSystemTrayIcon.MessageIcon.Information):
+        """Show a proactive desktop notification."""
+        if hasattr(self, 'tray_icon'):
+            self.tray_icon.showMessage(title, msg, icon, 5000)
+
+    def check_alerts(self):
+        """Predictive Alerting Logic and Daily Checks."""
+        from datetime import datetime
+        for p in self.data_manager.printers.values():
+            # 1. Prediction Alerts
+            for c in p.consumables:
+                days = p.estimate_days_remaining(c.name)
+                if days is not None and days < 5:
+                    self.show_notification("Proactive Supply Alert", 
+                        f"Toner '{c.name}' on {p.ip} is predicted to run out in ~{days} days.",
+                        QSystemTrayIcon.MessageIcon.Warning)
+            
+            # 2. Connectivity Alerts
+            if not p.is_online and (datetime.now() - p.last_seen).total_seconds() < 300: # Recently went offline
+                 self.show_notification("Connectivity Alert",
+                    f"Printer {p.ip} ({p.model}) has gone offline.",
+                    QSystemTrayIcon.MessageIcon.Critical)
 
     def setup_tray(self):
         """Setup system tray icon and menu."""
         self.tray_icon = QSystemTrayIcon(self)
-        # Using a standard icon if none exists
         self.tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
         
         tray_menu = QMenu()
@@ -264,85 +475,6 @@ class MainWindow(QMainWindow):
         
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.show()
-        self.tray_icon.activated.connect(self.tray_icon_activated)
-
-    def tray_icon_activated(self, reason):
-        if reason == QSystemTrayIcon.ActivationReason.Trigger:
-            if self.isVisible():
-                self.hide()
-            else:
-                self.showNormal()
-
-    def check_alerts(self):
-        """Check for low toner or printers going offline and notify user."""
-        if not hasattr(self, "_notified_alerts"):
-            self._notified_alerts = set()
-            
-        for p in self.data_manager.printers.values():
-            if p.is_online:
-                for c in p.consumables:
-                    alert_key = f"{p.ip}_{c.name}_{c.level//10}" # Notify every 10% drop
-                    if c.percentage < 10 and alert_key not in self._notified_alerts:
-                        self.tray_icon.showMessage(
-                            "Low Supplies Warning",
-                            f"{p.brand} {p.model} ({p.ip}) is low on {c.name} ({c.percentage}%)",
-                            QSystemTrayIcon.MessageIcon.Warning,
-                            5000
-                        )
-                        self._notified_alerts.add(alert_key)
-            elif f"{p.ip}_offline" not in self._notified_alerts:
-                # Optional: Notify if a previously online printer goes offline
-                # self._notified_alerts.add(f"{p.ip}_offline")
-                pass
-
-    def show_context_menu(self, pos):
-        from PyQt6.QtWidgets import QMenu
-        menu = QMenu()
-        menu.setStyleSheet("""
-            QMenu { 
-                background-color: #252526; 
-                border: 1px solid #3e3e42; 
-                color: #cccccc;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 24px;
-                border-radius: 2px;
-            }
-            QMenu::item:selected { 
-                background-color: #094771; 
-                color: #ffffff; 
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #333;
-                margin: 4px 8px;
-            }
-        """)
-        
-        open_web_action = menu.addAction("Open Admin Web")
-        menu.addSeparator()
-        copy_action = menu.addAction("Copy Row Data")
-        copy_ip_action = menu.addAction("Copy IP Address")
-        
-        action = menu.exec(self.table.viewport().mapToGlobal(pos))
-        
-        if action == open_web_action:
-            row = self.table.currentRow()
-            if row != -1:
-                ip_item = self.table.item(row, 1)
-                if ip_item:
-                    import webbrowser
-                    webbrowser.open(f"http://{ip_item.text()}")
-        elif action == copy_action:
-            self.table.copy_selection()
-        elif action == copy_ip_action:
-            row = self.table.currentRow()
-            if row != -1:
-                ip_item = self.table.item(row, 1)
-                if ip_item:
-                    from PyQt6.QtWidgets import QApplication
-                    QApplication.clipboard().setText(ip_item.text())
 
     def filter_table(self, text):
         text = text.lower()
@@ -355,34 +487,9 @@ class MainWindow(QMainWindow):
                     break
             self.table.setRowHidden(i, not match)
 
-    def handle_selection_changed(self):
-        selected = self.table.selectedItems()
-        if not selected:
-            self.sidebar.hide()
-            return
-            
-        row = selected[0].row()
-        ip_item = self.table.item(row, 1) # IP column
-        if ip_item:
-            ip = ip_item.text()
-            printer = self.data_manager.printers.get(ip)
-            if printer:
-                self.sidebar.update_details(printer.to_dict())
-
     def update_stats(self):
-        total = len(self.data_manager.printers)
-        online = sum(1 for p in self.data_manager.printers.values() if p.is_online)
-        alerts = 0
-        for p in self.data_manager.printers.values():
-            if p.is_online:
-                for c in p.consumables:
-                    if c.percentage < 15:
-                        alerts += 1
-                        break
-        
-        self.stat_total.set_value(total)
-        self.stat_online.set_value(online)
-        self.stat_alerts.set_value(alerts)
+        if hasattr(self, "analytics_page"):
+            self.analytics_page.refresh_data()
 
     def toggle_auto_refresh(self):
         if self.auto_refresh_cb.isChecked():
@@ -404,28 +511,16 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def start_scan(self):
-        self.scan_btn.setEnabled(False)
-        self.progress_container.show()
-        self.progress_bar.setValue(0)
-        self.statusBar().showMessage("Initializing scan...")
-        
-        start_ip = self.start_ip_input.text().strip()
-        end_ip = self.end_ip_input.text().strip()
-        
-        self.worker = DiscoveryWorker(start_ip, end_ip)
-        self.worker.printer_found.connect(self.handle_printer_found)
-        self.worker.progress.connect(lambda msg: self.statusBar().showMessage(msg))
-        self.worker.progress_val.connect(self.progress_bar.setValue)
-        self.worker.current_ip.connect(lambda ip: self.current_proc_label.setText(f"Active: {ip}"))
-        self.worker.finished.connect(self.scan_finished)
-        self.worker.start()
+    def _on_progress(self, msg: str):
+        self.statusBar().showMessage(msg)
+        if hasattr(self, "console") and msg:
+            self.console.log("DEBUG", msg)
 
     def handle_printer_found(self, p_dict):
         try:
             from printscope.models.printer import Printer, Consumable
             from datetime import datetime
-            
+
             last_seen_str = p_dict.get("last_seen")
             try:
                 last_seen = datetime.fromisoformat(last_seen_str) if last_seen_str else datetime.now()
@@ -433,176 +528,206 @@ class MainWindow(QMainWindow):
                 last_seen = datetime.now()
 
             p = Printer(
-                ip=p_dict["ip"], hostname=p_dict["hostname"], brand=p_dict["brand"],
-                model=p_dict["model"], serial_number=p_dict["serial_number"],
+                ip=p_dict["ip"], hostname=p_dict.get("hostname"), brand=p_dict.get("brand"),
+                model=p_dict.get("model"), serial_number=p_dict.get("serial_number"),
                 mac_address=p_dict.get("mac_address"), uptime=p_dict.get("uptime"),
                 location=p_dict.get("location"),
-                status=p_dict["status"], is_online=p_dict["is_online"],
+                status=p_dict.get("status", "Online"), is_online=p_dict.get("is_online", True),
                 last_seen=last_seen,
-                web_interface_url=p_dict["web_interface_url"]
+                web_interface_url=p_dict.get("web_interface_url")
             )
-            p.consumables = [Consumable(c["name"], c["level"], c["max_capacity"]) for c in p_dict["consumables"]]
+            p.consumables = [
+                Consumable(c["name"], c["level"], c["max_capacity"])
+                for c in p_dict.get("consumables", [])
+            ]
             p.history = p_dict.get("history", [])
-            
+
             self.data_manager.add_or_update_printer(p)
             self.table.update_printer(p.to_dict())
             self.update_stats()
+
+            supply_txt = f"{len(p.consumables)} supplies" if p.consumables else "no toner data"
+            brand_model = f"{p.brand or ''} {p.model or p_dict['ip']}".strip()
+            if hasattr(self, "console"):
+                self.console.log("SUCCESS", f"Found: {brand_model} @ {p_dict['ip']} — {supply_txt}")
+
+            total = len(self.data_manager.printers)
+            if hasattr(self, "device_count_lbl"):
+                self.device_count_lbl.setText(f"{total} device{'s' if total != 1 else ''}")
         except Exception as e:
             import logging
             logging.getLogger("PrintScope").error(f"Error handling found printer: {e}")
 
-    def scan_finished(self):
-        self.scan_btn.setEnabled(True)
-        self.progress_container.hide()
-        self.statusBar().showMessage("Discovery Complete")
-        self.update_stats()
-
-    def export_data(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Export", "", "CSV Files (*.csv);;JSON Files (*.json)")
-        if path:
-            if path.endswith(".csv"): self.data_manager.export_csv(path)
-            else: self.data_manager.export_json(path)
-            QMessageBox.information(self, "Export", f"File saved: {path}")
 
     def apply_standard_styling(self):
-        """High-End Pixel Perfect UI - Enterprise Professional."""
+        """Apply premium enterprise dark theme — v3.0."""
         self.setStyleSheet("""
             QMainWindow, QWidget {
-                background-color: #1e1e1e;
-                color: #cccccc;
-                font-family: 'Segoe UI Variable Display', 'Segoe UI', 'Inter', Arial, sans-serif;
-            }
-            
-            #dashboard { 
-                background-color: #252526; 
-                border-bottom: 1px solid #2d2d2d;
-            }
-            
-            #ctrl_bar {
-                background-color: #1e1e1e;
-                border-bottom: 1px solid #2d2d2d;
-            }
-            
-            #progress_container {
-                background-color: #1e1e1e;
-            }
-            
-            /* Custom Modern ScrollBar */
-            QScrollBar:vertical {
-                border: none;
-                background: #1e1e1e;
-                width: 10px;
-                margin: 0px 0px 0px 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #3e3e42;
-                min-height: 20px;
-                border-radius: 5px;
-                margin: 2px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #4e4e52;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            
-            QScrollBar:horizontal {
-                border: none;
-                background: #1e1e1e;
-                height: 10px;
-                margin: 0px 0px 0px 0px;
-            }
-            QScrollBar::handle:horizontal {
-                background: #3e3e42;
-                min-width: 20px;
-                border-radius: 5px;
-                margin: 2px;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
-            }
-
-            QPushButton {
-                background-color: #333337;
-                border: 1px solid #3e3e42;
-                padding: 7px 15px;
-                border-radius: 4px;
-                color: #f1f1f1;
+                background-color: #0d0d0f;
+                color: #f0f0f5;
+                font-family: 'Segoe UI', 'Segoe UI Variable Display', Arial, sans-serif;
                 font-size: 12px;
-                font-weight: 500;
             }
-            QPushButton:hover { 
-                background-color: #3e3e42; 
-                border-color: #007acc; 
+            #ctrl_container {
+                background-color: #141416;
+                border-bottom: 1px solid #252530;
             }
-            QPushButton:pressed { background-color: #094771; }
-            
-            QPushButton#scan_btn { 
-                background-color: #007acc; 
-                color: #ffffff;
-                border: 1px solid #0097fb;
+            #progress_container { background-color: #141416; }
+            QPushButton {
+                background: #1a1a1e;
+                border: 1px solid #252530;
+                padding: 7px 16px;
+                border-radius: 6px;
+                color: #c0c0cc;
+                font-size: 11px;
                 font-weight: 600;
                 letter-spacing: 0.5px;
             }
-            QPushButton#scan_btn:hover { background-color: #1c97ea; border-color: #34b1ff; }
-            QPushButton#scan_btn:disabled { background-color: #2d2d30; color: #555; border-color: #333; }
-            
-            QPushButton#report_btn {
-                background-color: #2d2d30;
-                border: 1px solid #3e3e42;
-                color: #aeaeae;
-            }
-            QPushButton#report_btn:hover { color: #ffffff; border-color: #007acc; }
-
+            QPushButton:hover { background: #212128; border-color: #35354a; color: #f0f0f5; }
+            QPushButton:pressed { background: #0d0d0f; }
+            QPushButton#scan_btn { background: #2ed573; color: #0d0d0f; border: none; font-weight: 700; }
+            QPushButton#scan_btn:hover  { background: #48e887; }
+            QPushButton#scan_btn:disabled { background: #1a2e22; color: #2a5a38; border: none; }
             QLineEdit {
-                background-color: #2d2d30;
-                border: 1px solid #3e3e42;
+                background: #1a1a1e;
+                border: 1px solid #252530;
                 padding: 7px 12px;
-                color: #ffffff;
-                border-radius: 4px;
-                font-size: 13px;
-                selection-background-color: #007acc;
+                color: #f0f0f5;
+                border-radius: 6px;
+                font-size: 12px;
             }
-            QLineEdit:focus { border-color: #007acc; background-color: #1e1e1e; }
-            
+            QLineEdit:focus { border-color: #2ed573; }
             QStatusBar {
-                background-color: #007acc;
-                color: #ffffff;
-                font-size: 11px;
-                font-weight: 500;
-                padding-left: 10px;
+                background: #141416;
+                color: #888899;
+                font-size: 10px;
+                font-weight: 600;
+                border-top: 1px solid #252530;
             }
-            
             QToolTip {
-                background-color: #252526;
-                color: #ffffff;
-                border: 1px solid #3e3e42;
-                padding: 6px;
-                border-radius: 4px;
+                background: #1a1a1e;
+                color: #f0f0f5;
+                border: 1px solid #35354a;
+                padding: 6px 10px;
+                border-radius: 6px;
                 font-size: 11px;
             }
-            
-            QLabel { color: #aeaeae; }
-            
+            QLabel { color: #888899; }
             QMenu {
-                background-color: #252526;
-                border: 1px solid #3e3e42;
-                color: #cccccc;
-                padding: 5px;
+                background: #1a1a1e;
+                border: 1px solid #252530;
+                color: #c0c0cc;
+                padding: 6px;
+                border-radius: 8px;
             }
-            QMenu::item {
-                padding: 6px 28px;
-                border-radius: 3px;
-                margin: 2px;
-            }
-            QMenu::item:selected {
-                background-color: #094771;
-                color: #ffffff;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #333;
-                margin: 5px 10px;
-            }
+            QMenu::item { padding: 7px 24px; border-radius: 4px; margin: 2px; }
+            QMenu::item:selected { background: #212128; color: #f0f0f5; }
+            QMenu::separator { height: 1px; background: #252530; margin: 4px 10px; }
+            QProgressBar { background: #1a1a1e; border: none; border-radius: 3px; }
+            QProgressBar::chunk { background: #2ed573; border-radius: 3px; }
         """)
+
+    # ── Export ──────────────────────────────────────────────────────────────────
+
+    def export_html_report(self):
+        """Generate and immediately open an executive HTML fleet report."""
+        import tempfile, os, webbrowser
+        if not self.data_manager.printers:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "No Data", "Run a scan first to populate fleet data.")
+            return
+        # Save to a temp file so it always opens fresh
+        tmp = os.path.join(tempfile.gettempdir(), "printscope_report.html")
+        self.data_manager.export_html(tmp)
+        webbrowser.open(f"file:///{tmp}")
+        self.statusBar().showMessage(f"Report opened in browser — {tmp}")
+        if hasattr(self, "console"):
+            self.console.log("SUCCESS", f"Fleet report exported → {tmp}")
+
+    def export_data(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export", "", "HTML Report (*.html);;CSV (*.csv);;JSON (*.json)"
+        )
+        if not path:
+            return
+        if path.endswith(".csv"):
+            self.data_manager.export_csv(path)
+        elif path.endswith(".json"):
+            self.data_manager.export_json(path)
+        else:
+            self.data_manager.export_html(path)
+            import webbrowser
+            webbrowser.open(f"file:///{path}")
+        QMessageBox.information(self, "Export", f"Saved: {path}")
+
+    # ── Keyboard shortcuts ───────────────────────────────────────────────────────
+
+    def _setup_shortcuts(self):
+        from PyQt6.QtGui import QShortcut, QKeySequence
+        QShortcut(QKeySequence("Ctrl+R"), self, activated=self.start_scan)
+        QShortcut(QKeySequence("Ctrl+E"), self, activated=self.export_html_report)
+        QShortcut(QKeySequence("Ctrl+F"), self, activated=self.search_input.setFocus)
+
+    # ── Scan animation ───────────────────────────────────────────────────────────
+
+    def _start_scan_animation(self):
+        """Pulse '▶ RUN SCAN' → '⏳ Scanning…' while scan runs."""
+        self._scan_anim_step = 0
+        self._scan_dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        from PyQt6.QtCore import QTimer
+        self._scan_anim_timer = QTimer(self)
+        self._scan_anim_timer.timeout.connect(self._tick_scan_animation)
+        self._scan_anim_timer.start(100)
+
+    def _tick_scan_animation(self):
+        dot = self._scan_dots[self._scan_anim_step % len(self._scan_dots)]
+        self.scan_btn.setText(f"  {dot}  SCANNING")
+        self._scan_anim_step += 1
+
+    def _stop_scan_animation(self):
+        if hasattr(self, "_scan_anim_timer"):
+            self._scan_anim_timer.stop()
+        self.scan_btn.setText("  ▶  RUN SCAN")
+
+    # ── Override start_scan to add animation ────────────────────────────────────
+
+    def start_scan(self):
+        self.scan_btn.setEnabled(False)
+        self.progress_container.show()
+        self.progress_bar.setValue(0)
+        self.statusBar().showMessage("Initializing scan…")
+        self._start_scan_animation()
+
+        start_ip = self.start_ip_input.text().strip()
+        end_ip   = self.end_ip_input.text().strip()
+
+        if hasattr(self, "console"):
+            self.console.log("INFO", f"Starting discovery: {start_ip} → {end_ip}")
+
+        self.worker = DiscoveryWorker(start_ip, end_ip, self.config_manager)
+        self.worker.printer_found.connect(self.handle_printer_found)
+        self.worker.progress.connect(self._on_progress)
+        self.worker.progress_val.connect(self.progress_bar.setValue)
+        self.worker.current_ip.connect(lambda ip: self.current_proc_label.setText(ip))
+        self.worker.finished.connect(self.scan_finished)
+        self.worker.start()
+
+    def scan_finished(self):
+        self._stop_scan_animation()
+        self.scan_btn.setEnabled(True)
+        self.progress_container.hide()
+        total   = len(self.data_manager.printers)
+        online  = sum(1 for p in self.data_manager.printers.values() if p.is_online)
+        no_data = sum(1 for p in self.data_manager.printers.values() if not p.consumables)
+        self.statusBar().showMessage(
+            f"Scan complete — {total} devices | {online} online | {no_data} without toner data"
+        )
+        if hasattr(self, "console"):
+            self.console.log(
+                "SUCCESS",
+                f"Scan complete: {total} devices found, {online} online, {no_data} without SNMP toner data"
+            )
+        if hasattr(self, "device_count_lbl"):
+            self.device_count_lbl.setText(f"{total} device{'s' if total != 1 else ''}")
+        self.update_stats()
+

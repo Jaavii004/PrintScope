@@ -2,7 +2,7 @@
 
 #define MyAppName "PrintScope"
 #define MyAppVersion "1.0.0"
-#define MyAppPublisher "Conselleria d'Educació"
+#define MyAppPublisher "Jaavii004"
 #define MyAppURL "https://github.com/Jaavii004/PrintScope"
 #define MyAppExeName "PrintScope.exe"
 
