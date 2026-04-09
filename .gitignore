@@ -3,3 +3,10 @@ dist/
 Output/
 PrintScope.spec
 __pycache__
+
+
+# Ignore discovered printers file
+discovered_printers.json
+
+# Ignore logs
+printscope.log
